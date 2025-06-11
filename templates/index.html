@@ -72,8 +72,8 @@
     </form>
     <div class="d-flex mb-3 align-items-center gap-2">
         <a href="{{ url_for('excel_log') }}" class="btn btn-secondary mb-0">Excel Log</a>
-        <form method="get" style="display:inline;">
-            <button type="submit" name="fetch" value="1" class="btn btn-success btn-fetch mb-0">Fetch Tasks</button>
+        <form method="get" action="{{ url_for('index') }}" style="display:inline;">
+            <button type="submit" name="fetch" value="1" class="btn btn-secondary">Fetch Tasks</button>
         </form>
     </div>
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -136,6 +136,9 @@
     </form>
     <form id="individual-form" method="get" action="{{ url_for('log_time_multiple_individual') }}" style="display:none;">
         <!-- Only include checked tasks -->
+    </form>
+    <form action="{{ url_for('clear_pat') }}" method="get" style="display:inline;">
+        <button type="submit" class="btn btn-warning">Clear PAT</button>
     </form>
     <script>
     document.getElementById('log-individual-btn').onclick = function() {
