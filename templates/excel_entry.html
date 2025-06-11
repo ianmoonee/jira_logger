@@ -1,0 +1,22 @@
+{% extends "index.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Excel Entry Lookup</h2>
+    <form method="post">
+        <div class="mb-3">
+            <label for="date_input" class="form-label">Date (DD/MM/YYYY):</label>
+            <input type="text" name="date_input" class="form-control" value="{{ date_input }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="name_input" class="form-label">Column Name (e.g. Pedro Serrano):</label>
+            <input type="text" name="name_input" class="form-control" value="{{ name_input }}" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Lookup</button>
+    </form>
+    {% if entry %}
+        <div class="alert alert-info mt-3"><strong>Entry:</strong><br>{{ entry|safe }}</div>
+    {% elif error %}
+        <div class="alert alert-danger mt-3">{{ error }}</div>
+    {% endif %}
+</div>
+{% endblock %}

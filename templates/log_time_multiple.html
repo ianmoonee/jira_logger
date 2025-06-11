@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Log Time for Selected Tasks</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <style>
+        body.dark-mode { background: #181a1b !important; color: #e8e6e3 !important; }
+        .dark-mode .container { background: #181a1b; color: #e8e6e3; }
+        .dark-mode .table,
+        .dark-mode .table thead,
+        .dark-mode .table tbody,
+        .dark-mode .table tr,
+        .dark-mode .table td,
+        .dark-mode .table th {
+            background-color: #23272b !important;
+            color: #e8e6e3 !important;
+        }
+        .dark-mode .table-striped > tbody > tr:nth-of-type(odd) {
+            background-color: #23272b !important;
+        }
+        .dark-mode .table-striped > tbody > tr:nth-of-type(even) {
+            background-color: #202124 !important;
+        }
+        .dark-mode .table-bordered { border-color: #444; }
+        .dark-mode .table-bordered th, .dark-mode .table-bordered td { border-color: #444; }
+        .dark-mode .form-control, .dark-mode .btn, .dark-mode .badge { background: #23272b; color: #e8e6e3; border-color: #444; }
+        .dark-mode .form-control:focus { background: #23272b; color: #e8e6e3; }
+        .dark-mode .btn-primary, .dark-mode .btn-success, .dark-mode .btn-secondary, .dark-mode .btn-outline-primary, .dark-mode .btn-outline-secondary { color: #fff; }
+        .dark-mode .bg-success { background-color: #198754 !important; }
+        .dark-mode .bg-danger { background-color: #dc3545 !important; }
+        .dark-mode .alert { background: #23272b; color: #e8e6e3; border-color: #444; }
+        /* Switch styles */
+        .dark-switch { display: flex; align-items: center; gap: 8px; }
+        .switch { position: relative; display: inline-block; width: 48px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 2px; bottom: 2px; background-color: #fff; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #343a40; }
+        input:checked + .slider:before { transform: translateX(24px); }
+        .switch-icon { font-size: 1.2em; }
+    </style>
+</head>
+<body>
+<div class="container mt-5">
+    <div class="d-flex justify-content-end mb-2">
+        <div class="dark-switch">
+            <span class="switch-icon" id="sun">☀️</span>
+            <label class="switch">
+                <input type="checkbox" id="toggle-dark">
+                <span class="slider"></span>
+            </label>
+            <span class="switch-icon" id="moon">🌙</span>
+        </div>
+    </div>
+    <h2>Log Time for Selected Tasks</h2>
+    {% if per_task %}
+        <form method="post">
+            {% for key, summary in selected_task_info %}
+                <input type="hidden" name="selected_tasks" value="{{ key }}">
+                <div class="mb-3 border rounded p-2">
+                    <label class="form-label"><b>{{ key }}</b>: {{ summary }}</label>
+                    <input type="text" class="form-control mb-1" name="time_spent_{{ key }}" placeholder="Time Spent (e.g., 1h, 30m)" required>
+                    <input type="text" class="form-control" name="date_input_{{ key }}" placeholder="Start Date (HH:MM DD-MM-YYYY, default is now)">
+                </div>
+            {% endfor %}
+            <button type="submit" name="per_task" value="1" class="btn btn-info">Log Each Task Individually</button>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+        <script>
+        document.querySelectorAll('input[name^="date_input_"]').forEach(function(input) {
+            flatpickr(input, {
+                enableTime: true,
+                dateFormat: "H:i d-m-Y",
+                time_24hr: true,
+                defaultDate: new Date(),
+            });
+        });
+        </script>
+    {% elif dry_run %}
+        <div class="alert alert-info">
+            <h5>Dry Run: Please confirm the following log operation</h5>
+            <p>You are about to log <strong>{{ time_spent }}</strong> at <strong>{{ date_input if date_input else 'now' }}</strong> for the following tasks:</p>
+            <ul>
+                {% for key, summary in selected_task_info %}
+                    <li><b>{{ key }}</b>: {{ summary }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <form method="post">
+            {% for key, summary in selected_task_info %}
+                <input type="hidden" name="selected_tasks" value="{{ key }}">
+            {% endfor %}
+            <input type="hidden" name="time_spent" value="{{ time_spent }}">
+            <input type="hidden" name="date_input" value="{{ date_input }}">
+            <button type="submit" name="confirm" value="1" class="btn btn-success">Confirm and Log Time</button>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    {% else %}
+        <form method="post">
+            {% for key, summary in selected_task_info %}
+                <input type="hidden" name="selected_tasks" value="{{ key }}">
+            {% endfor %}
+            <div class="mb-3">
+                <label for="time_spent" class="form-label">Time Spent (e.g., 1h, 30m):</label>
+                <input type="text" class="form-control" id="time_spent" name="time_spent" required value="{{ time_spent if time_spent else '' }}">
+            </div>
+            <div class="mb-3">
+                <label for="date_input" class="form-label">Start Date (HH:MM DD-MM-YYYY, default is now):</label>
+                <input type="text" class="form-control" id="date_input" name="date_input" placeholder="Start Date (HH:MM DD-MM-YYYY, default is now)" value="{{ date_input }}">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Selected Tasks:</label>
+                <ul>
+                    {% for key, summary in selected_task_info %}
+                        <li><b>{{ key }}</b>: {{ summary }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="mb-3">
+                <button type="submit" class="btn btn-primary">Dry Run</button>
+                <button type="submit" name="per_task_form" value="1" class="btn btn-info ms-2">Log Each Task Individually</button>
+            </div>
+        </form>
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+        <script>
+        // Only initialize flatpickr if the input exists
+        var dateInput = document.getElementById('date_input');
+        if (dateInput) {
+            flatpickr(dateInput, {
+                enableTime: true,
+                dateFormat: "H:i d-m-Y",
+                time_24hr: true,
+                defaultDate: document.getElementById('date_input').value || new Date(),
+            });
+        }
+        </script>
+    {% endif %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+// Dark mode toggle and persistence
+function setDarkMode(on) {
+    if (on) {
+        document.body.classList.add('dark-mode');
+        localStorage.setItem('darkMode', 'true');
+        document.getElementById('toggle-dark').checked = true;
+    } else {
+        document.body.classList.remove('dark-mode');
+        localStorage.setItem('darkMode', 'false');
+        document.getElementById('toggle-dark').checked = false;
+    }
+}
+document.getElementById('toggle-dark').onchange = function() {
+    setDarkMode(this.checked);
+};
+if (localStorage.getItem('darkMode') === 'true') {
+    setDarkMode(true);
+} else {
+    setDarkMode(false);
+}
+</script>
+</body>
+</html>

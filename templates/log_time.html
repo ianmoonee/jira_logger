@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Log Time for {{ issue_key }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet">
+    <style>
+        body.dark-mode { background: #181a1b !important; color: #e8e6e3 !important; }
+        .dark-mode .container { background: #181a1b; color: #e8e6e3; }
+        .dark-mode .form-control, .dark-mode .btn { background: #23272b; color: #e8e6e3; border-color: #444; }
+        .dark-mode .form-control:focus { background: #23272b; color: #e8e6e3; }
+        .dark-mode .btn-primary, .dark-mode .btn-success, .dark-mode .btn-secondary, .dark-mode .btn-outline-primary, .dark-mode .btn-outline-secondary { color: #fff; }
+        /* Switch styles */
+        .dark-switch { display: flex; align-items: center; gap: 8px; }
+        .switch { position: relative; display: inline-block; width: 48px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 2px; bottom: 2px; background-color: #fff; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #343a40; }
+        input:checked + .slider:before { transform: translateX(24px); }
+        .switch-icon { font-size: 1.2em; }
+        .dark-mode .table,
+        .dark-mode .table thead,
+        .dark-mode .table tbody,
+        .dark-mode .table tr,
+        .dark-mode .table td,
+        .dark-mode .table th {
+            background-color: #23272b !important;
+            color: #e8e6e3 !important;
+        }
+        .dark-mode .table-striped > tbody > tr:nth-of-type(odd) {
+            background-color: #23272b !important;
+        }
+        .dark-mode .table-striped > tbody > tr:nth-of-type(even) {
+            background-color: #202124 !important;
+        }
+    </style>
+</head>
+<body>
+<div class="container mt-5">
+    <div class="d-flex justify-content-end mb-2">
+        <div class="dark-switch">
+            <span class="switch-icon" id="sun">☀️</span>
+            <label class="switch">
+                <input type="checkbox" id="toggle-dark">
+                <span class="slider"></span>
+            </label>
+            <span class="switch-icon" id="moon">🌙</span>
+        </div>
+    </div>
+    <h1>Log Time for {{ summary }} ({{ issue_key }})</h1>
+    <form method="post">
+        <label>Time Spent (e.g., 1h, 30m):
+            <input type="text" name="time_spent" required class="form-control" value="{{ time_spent }}">
+        </label><br>
+        <label>Start Date (HH:MM DD-MM-YYYY, blank for now):
+            <input type="text" name="date_input" class="form-control" id="date_input" placeholder="Start Date (HH:MM DD-MM-YYYY, default is now)" value="{{ date_input }}">
+        </label><br>
+        <div class="mb-3 mt-3">
+            <button type="submit" name="dry_run" value="1" class="btn btn-warning">Dry Run</button>
+            <button type="submit" name="confirm" value="1" class="btn btn-primary" {% if not dry_run %}disabled{% endif %}>Log Time</button>
+        </div>
+    </form>
+    {% if dry_run %}
+        <div class="alert alert-info mt-3">
+            <h5>Dry Run Summary</h5>
+            <ul>
+                <li><b>Task:</b> {{ summary }} ({{ issue_key }})</li>
+                <li><b>Time Spent:</b> {{ time_spent }}</li>
+                <li><b>Date:</b> {{ date_input if date_input else 'now' }}</li>
+            </ul>
+            <p>If the above looks correct, click <b>Log Time</b> to confirm.</p>
+        </div>
+    {% endif %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+function setDarkMode(on) {
+    if (on) {
+        document.body.classList.add('dark-mode');
+        localStorage.setItem('darkMode', 'true');
+        document.getElementById('toggle-dark').checked = true;
+    } else {
+        document.body.classList.remove('dark-mode');
+        localStorage.setItem('darkMode', 'false');
+        document.getElementById('toggle-dark').checked = false;
+    }
+}
+document.getElementById('toggle-dark').onchange = function() {
+    setDarkMode(this.checked);
+};
+if (localStorage.getItem('darkMode') === 'true') {
+    setDarkMode(true);
+} else {
+    setDarkMode(false);
+}
+if (document.getElementById('date_input')) {
+    flatpickr("#date_input", {
+        enableTime: true,
+        dateFormat: "H:i d-m-Y",
+        time_24hr: true,
+        defaultDate: document.getElementById('date_input').value || new Date(),
+    });
+}
+</script>
+</body>
+</html>
