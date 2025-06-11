@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 import requests
 import datetime
-import os
 import re
 import pandas as pd
 from jiraLogger import get_excel_entry
@@ -14,11 +13,8 @@ app.secret_key = 'asdasd'  # Replace with a random, secure value
 JIRA_DOMAIN = 'https://jira.critical.pt'
 
 def get_pat():
-    """Retrieve the JIRA Personal Access Token from session or environment."""
-    pat = session.get('JIRA_PAT')
-    if not pat:
-        pat = os.getenv('JIRA_PAT')
-    return pat
+    """Retrieve the JIRA Personal Access Token from session only."""
+    return session.get('JIRA_PAT')
 
 def get_headers():
     """Return headers for JIRA API requests, including authorization if available."""
@@ -77,26 +73,18 @@ def log_work(issue_key, time_spent, started):
 @app.route('/', methods=['GET', 'POST'])
 def index():
     """Main page: show tasks, allow filtering and sorting."""
-    # Default sort by summary, descending
     sort_by = request.args.get('sort_by', 'summary')
     sort_order = request.args.get('sort_order', 'desc')
     filter_keyword = request.form.get('filter', '').lower() if request.method == 'POST' else request.args.get('filter', '').lower()
-    tasks = []
-    error = None
-    fetch_requested = (request.method == 'GET' and request.args.get('fetch') == '1')
-    filter_requested = (request.method == 'POST' and filter_keyword) or (request.method == 'GET' and filter_keyword)
 
-    if fetch_requested or filter_requested:
-        # Fetch from JIRA and do NOT store in session
-        tasks, error = get_assigned_tasks()
-        if error:
-            flash(error, 'danger')
-            tasks = []
-        if filter_keyword:
-            tasks = [t for t in tasks if filter_keyword in t['fields']['summary'].lower()]
-    else:
-        # If not fetching/filtering, do not use session, just show empty or prompt user to fetch
+    # Always fetch tasks when loading the page
+    tasks, error = get_assigned_tasks()
+    if error:
+        flash(error, 'danger')
         tasks = []
+    if filter_keyword:
+        tasks = [t for t in tasks if filter_keyword in t['fields']['summary'].lower()]
+
     # Sorting
     if tasks:
         reverse = (sort_order == 'desc')
@@ -275,7 +263,7 @@ def excel_log():
     """Show a form to fetch a cell from an Excel file, with editable file path."""
     value1 = ''
     value2 = ''
-    file_path = 'BSP-G2_Daily_Tracker.xlsx'
+    file_path = '/mnt/c/Users/peserrano/OneDrive - CRITICAL SOFTWARE, S.A/BSP_G2/BSP-G2_Daily_Tracker.xlsx'
     result = None
     if request.method == 'POST':
         value1 = sanitize_text(request.form.get('value1', ''))  # Name
@@ -425,16 +413,22 @@ def log_from_excel_cell():
     # Pass the searched date as default_date to the log_time_multiple_individual page
     return redirect(url_for('log_time_multiple_individual', **{'selected_tasks': list(matched_keys), 'default_date': value2}))
 
+@app.route('/clear_pat')
+def clear_pat():
+    session.pop('JIRA_PAT', None)
+    flash('PAT cleared from session.', 'success')
+    return redirect(url_for('set_pat'))
+
 def sanitize_filename(filename):
-    """Allow only filenames under the jira directory, no path traversal."""
-    base_dir = pathlib.Path('jira').resolve()
-    try:
-        file_path = (base_dir / filename).resolve()
-        if not str(file_path).startswith(str(base_dir)):
-            raise ValueError('Invalid file path')
-        return str(file_path)
-    except Exception:
-        return str(base_dir / 'BSP-G2_Daily_Tracker.xlsx')
+    """Allow any path, but block path traversal and suspicious characters."""
+    filename = str(filename)
+    # Disallow path traversal
+    if '..' in filename or filename.strip() == '':
+        return 'BSP-G2_Daily_Tracker.xlsx'
+    # Optionally, allow only certain file extensions (e.g., .xlsx)
+    if not filename.lower().endswith('.xlsx'):
+        return 'BSP-G2_Daily_Tracker.xlsx'
+    return filename
 
 def sanitize_text(text, max_length=100):
     """Escape and trim user text input."""
