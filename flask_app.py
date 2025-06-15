@@ -209,6 +209,13 @@ def log_time_multiple_individual():
                 available_states[key] = [t['to']['name'] for t in transitions]
             else:
                 available_states[key] = []
+        # Compute the intersection of available states for all selected tasks
+        if selected_tasks:
+            common_states = set(available_states[selected_tasks[0]])
+            for key in selected_tasks[1:]:
+                common_states.intersection_update(available_states[key])
+        else:
+            common_states = set()
         if 'dry_run' in request.form:
             # Show dry run summary with status for each (do NOT change state here)
             per_task_data = []
@@ -225,7 +232,7 @@ def log_time_multiple_individual():
                 except Exception:
                     status = 'Invalid date'
                 per_task_data.append({'key': key, 'summary': key_to_summary.get(key, ''), 'time_spent': time_spent, 'date_input': date_input, 'status': status, 'state': state})
-            return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info, per_task_data=per_task_data, dry_run=True, available_states=available_states)
+            return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info, per_task_data=per_task_data, dry_run=True, available_states=available_states, common_states=common_states)
         elif 'confirm' in request.form:
             # Actually log work for all tasks
             for key in selected_tasks:
@@ -264,7 +271,7 @@ def log_time_multiple_individual():
                     flash(transition_msg, 'success' if transition_success else 'danger')
             return redirect(url_for('index'))
         else:
-            return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info, available_states=available_states)
+            return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info, available_states=available_states, common_states=common_states)
     else:
         # GET: parse selected_tasks from query string
         selected_tasks = request.args.getlist('selected_tasks')
@@ -285,6 +292,13 @@ def log_time_multiple_individual():
                 available_states[key] = [t['to']['name'] for t in transitions]
             else:
                 available_states[key] = []
+        # Compute the intersection of available states for all selected tasks
+        if selected_tasks:
+            common_states = set(available_states[selected_tasks[0]])
+            for key in selected_tasks[1:]:
+                common_states.intersection_update(available_states[key])
+        else:
+            common_states = set()
         default_date_input = None
         if default_date:
             for fmt in ('%d-%m-%Y', '%d/%m/%Y'):
@@ -296,7 +310,7 @@ def log_time_multiple_individual():
                     continue
             if not default_date_input:
                 default_date_input = default_date
-        return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info, default_date_input=default_date_input, available_states=available_states)
+        return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info, default_date_input=default_date_input, available_states=available_states, common_states=common_states)
     return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info)
 
 @app.route('/excel_log', methods=['GET', 'POST'])

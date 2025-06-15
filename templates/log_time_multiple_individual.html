@@ -64,7 +64,17 @@
                         <th>Summary</th>
                         <th>Time Spent</th>
                         <th>Date/Hour</th>
-                        <th>Task State</th>
+                        <th>
+                            Task State
+                            {% if common_states and common_states|length > 0 %}
+                            <select id="set-all-states" class="form-select form-select-sm mt-1">
+                                <option value="">-- Set All --</option>
+                                {% for state in common_states %}
+                                    <option value="{{ state }}">{{ state }}</option>
+                                {% endfor %}
+                            </select>
+                            {% endif %}
+                        </th>
                         {% if dry_run %}<th>Status</th>{% endif %}
                     </tr>
                 </thead>
@@ -132,6 +142,16 @@
             defaultDate: input.value || new Date(),
         });
     });
+    // Set all states dropdown
+    var setAllStates = document.getElementById('set-all-states');
+    if (setAllStates) {
+        setAllStates.addEventListener('change', function() {
+            var value = this.value;
+            document.querySelectorAll('select[name^="state_"]').forEach(function(sel) {
+                sel.value = value;
+            });
+        });
+    }
     // Dark mode switch
     function setDarkMode(on) {
         if (on) {
