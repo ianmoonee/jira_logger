@@ -138,6 +138,16 @@ def log_time_multiple():
         all_tasks, _ = get_assigned_tasks()
         key_to_summary = {t['key']: t['fields']['summary'] for t in all_tasks}
         selected_task_info = [(key, key_to_summary.get(key, '')) for key in selected_tasks]
+        # Fetch available states for each task
+        available_states = {}
+        for key in selected_tasks:
+            url = f"{JIRA_DOMAIN}/rest/api/2/issue/{key}/transitions"
+            resp = requests.get(url, headers=get_headers())
+            if resp.status_code == 200:
+                transitions = resp.json().get('transitions', [])
+                available_states[key] = [t['to']['name'] for t in transitions]
+            else:
+                available_states[key] = []
         if 'confirm' in request.form:
             # Actually log work after dry run
             time_spent = sanitize_text(request.form['time_spent'], max_length=20)
@@ -189,14 +199,31 @@ def log_time_multiple_individual():
         all_tasks, _ = get_assigned_tasks()
         key_to_summary = {t['key']: t['fields']['summary'] for t in all_tasks}
         selected_task_info = [(key, key_to_summary.get(key, '')) for key in selected_tasks]
+        # Fetch available states for each task
+        available_states = {}
+        for key in selected_tasks:
+            url = f"{JIRA_DOMAIN}/rest/api/2/issue/{key}/transitions"
+            resp = requests.get(url, headers=get_headers())
+            if resp.status_code == 200:
+                transitions = resp.json().get('transitions', [])
+                available_states[key] = [t['to']['name'] for t in transitions]
+            else:
+                available_states[key] = []
+        # Compute the intersection of available states for all selected tasks
+        if selected_tasks:
+            common_states = set(available_states[selected_tasks[0]])
+            for key in selected_tasks[1:]:
+                common_states.intersection_update(available_states[key])
+        else:
+            common_states = set()
         if 'dry_run' in request.form:
-            # Show dry run summary with status for each
+            # Show dry run summary with status for each (do NOT change state here)
             per_task_data = []
             for key in selected_tasks:
                 time_spent = sanitize_text(request.form.get(f'time_spent_{key}'), max_length=20)
                 date_input = sanitize_text(request.form.get(f'date_input_{key}'), max_length=30)
+                state = request.form.get(f'state_{key}', '')
                 status = 'ok'
-                # Validate input
                 if not time_spent or not is_valid_time_spent(time_spent):
                     status = 'Invalid time (use e.g. 1h10m, 10m, 2h)'
                 try:
@@ -204,36 +231,47 @@ def log_time_multiple_individual():
                         datetime.datetime.strptime(date_input, "%H:%M %d-%m-%Y")
                 except Exception:
                     status = 'Invalid date'
-                per_task_data.append({'key': key, 'summary': key_to_summary.get(key, ''), 'time_spent': time_spent, 'date_input': date_input, 'status': status})
-            return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info, per_task_data=per_task_data, dry_run=True)
+                per_task_data.append({'key': key, 'summary': key_to_summary.get(key, ''), 'time_spent': time_spent, 'date_input': date_input, 'status': status, 'state': state})
+            return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info, per_task_data=per_task_data, dry_run=True, available_states=available_states, common_states=common_states)
         elif 'confirm' in request.form:
             # Actually log work for all tasks
             for key in selected_tasks:
                 time_spent = sanitize_text(request.form.get(f'time_spent_{key}'), max_length=20)
+                if not time_spent:
+                    time_spent = '0h'
                 date_input = sanitize_text(request.form.get(f'date_input_{key}'), max_length=30)
-                if not time_spent or not is_valid_time_spent(time_spent):
+                state = request.form.get(f'state_{key}', '')
+                hours, minutes = parse_time_spent(time_spent) if time_spent and is_valid_time_spent(time_spent) else (0, 0)
+                # Only log work if time is not zero
+                if time_spent and is_valid_time_spent(time_spent) and (hours > 0 or minutes > 0):
+                    formatted_time_spent = ''
+                    if hours:
+                        formatted_time_spent += f'{hours}h'
+                    if minutes or not hours:
+                        formatted_time_spent += f'{minutes}m'
+                    try:
+                        if date_input:
+                            started = datetime.datetime.strptime(date_input, "%H:%M %d-%m-%Y").strftime('%Y-%m-%dT%H:%M:%S.000+0000')
+                        else:
+                            started = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000+0000')
+                    except ValueError:
+                        flash(f"Invalid date format for {key}. Use HH:MM DD-MM-YYYY.", 'danger')
+                        return redirect(request.url)
+                    success, msg = log_work(key, formatted_time_spent, started)
+                    flash(msg, 'success' if success else 'danger')
+                elif time_spent and is_valid_time_spent(time_spent) and (hours == 0 and minutes == 0):
+                    # 0h/0m entered, do not log work, just continue
+                    pass
+                elif time_spent and not is_valid_time_spent(time_spent):
                     flash(f"Invalid time for {key}. Use e.g. 1h10m, 10m, 2h", 'danger')
                     return redirect(request.url)
-                # If only hours, add 0m for display/logging clarity
-                hours, minutes = parse_time_spent(time_spent)
-                formatted_time_spent = ''
-                if hours:
-                    formatted_time_spent += f'{hours}h'
-                if minutes or not hours:
-                    formatted_time_spent += f'{minutes}m'
-                try:
-                    if date_input:
-                        started = datetime.datetime.strptime(date_input, "%H:%M %d-%m-%Y").strftime('%Y-%m-%dT%H:%M:%S.000+0000')
-                    else:
-                        started = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000+0000')
-                except ValueError:
-                    flash(f"Invalid date format for {key}. Use HH:MM DD-MM-YYYY.", 'danger')
-                    return redirect(request.url)
-                success, msg = log_work(key, formatted_time_spent, started)
-                flash(msg, 'success' if success else 'danger')
+                # --- Change task state if requested ---
+                if state:
+                    transition_success, transition_msg = transition_issue_state(key, state)
+                    flash(transition_msg, 'success' if transition_success else 'danger')
             return redirect(url_for('index'))
         else:
-            return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info)
+            return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info, available_states=available_states, common_states=common_states)
     else:
         # GET: parse selected_tasks from query string
         selected_tasks = request.args.getlist('selected_tasks')
@@ -244,7 +282,23 @@ def log_time_multiple_individual():
         all_tasks, _ = get_assigned_tasks()
         key_to_summary = {t['key']: t['fields']['summary'] for t in all_tasks}
         selected_task_info = [(key, key_to_summary.get(key, '')) for key in selected_tasks]
-        # If default_date is present, format as 09:00 DD-MM-YYYY if only a date, else use as is
+        # Fetch available states for each task
+        available_states = {}
+        for key in selected_tasks:
+            url = f"{JIRA_DOMAIN}/rest/api/2/issue/{key}/transitions"
+            resp = requests.get(url, headers=get_headers())
+            if resp.status_code == 200:
+                transitions = resp.json().get('transitions', [])
+                available_states[key] = [t['to']['name'] for t in transitions]
+            else:
+                available_states[key] = []
+        # Compute the intersection of available states for all selected tasks
+        if selected_tasks:
+            common_states = set(available_states[selected_tasks[0]])
+            for key in selected_tasks[1:]:
+                common_states.intersection_update(available_states[key])
+        else:
+            common_states = set()
         default_date_input = None
         if default_date:
             for fmt in ('%d-%m-%Y', '%d/%m/%Y'):
@@ -256,7 +310,8 @@ def log_time_multiple_individual():
                     continue
             if not default_date_input:
                 default_date_input = default_date
-        return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info, default_date_input=default_date_input)
+        return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info, default_date_input=default_date_input, available_states=available_states, common_states=common_states)
+    return render_template('log_time_multiple_individual.html', selected_tasks=selected_tasks, selected_task_info=selected_task_info)
 
 @app.route('/excel_log', methods=['GET', 'POST'])
 def excel_log():
@@ -433,6 +488,31 @@ def sanitize_filename(filename):
 def sanitize_text(text, max_length=100):
     """Escape and trim user text input."""
     return escape(str(text)[:max_length])
+
+def transition_issue_state(issue_key, target_state):
+    """Transition a JIRA issue to the given state (e.g., 'To Do', 'In Progress', 'Done')."""
+    # 1. Get available transitions
+    url = f"{JIRA_DOMAIN}/rest/api/2/issue/{issue_key}/transitions"
+    response = requests.get(url, headers=get_headers())
+    if response.status_code != 200:
+        return False, f"Failed to fetch transitions for {issue_key}: {response.status_code} {response.text}"
+    transitions = response.json().get('transitions', [])
+    # 2. Find the transition id for the target state
+    transition_id = None
+    for t in transitions:
+        if t['to']['name'].lower() == target_state.lower():
+            transition_id = t['id']
+            break
+    if not transition_id:
+        return False, f"No transition to '{target_state}' available for {issue_key}."
+    # 3. Perform the transition
+    post_url = f"{JIRA_DOMAIN}/rest/api/2/issue/{issue_key}/transitions"
+    payload = {"transition": {"id": transition_id}}
+    post_resp = requests.post(post_url, headers=get_headers(), json=payload)
+    if post_resp.status_code == 204:
+        return True, f"Task {issue_key} transitioned to '{target_state}'."
+    else:
+        return False, f"Failed to transition {issue_key}: {post_resp.status_code} {post_resp.text}"
 
 if __name__ == '__main__':
     app.run(debug=True)
