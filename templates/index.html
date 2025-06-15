@@ -90,7 +90,9 @@
         <table class="table table-striped table-hover align-middle">
             <thead>
                 <tr>
-                    <th></th>
+                    <th>
+                        <input type="checkbox" id="select-all-tasks">
+                    </th>
                     <th>
                         Key
                         <a href="?fetch=1&filter={{ filter_keyword }}&sort_by=key&sort_order={{ 'desc' if sort_by == 'key' and sort_order == 'asc' else 'asc' }}" class="sort-link">
@@ -181,6 +183,16 @@
             window.location.reload();
         }
     });
+
+    // Select all tasks checkbox
+    const selectAll = document.getElementById('select-all-tasks');
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            document.querySelectorAll('input[type=checkbox][name=selected_tasks]').forEach(function(cb) {
+                cb.checked = selectAll.checked;
+            });
+        });
+    }
     </script>
 </div>
 </body>
