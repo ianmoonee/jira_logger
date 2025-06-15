@@ -64,6 +64,7 @@
                         <th>Summary</th>
                         <th>Time Spent</th>
                         <th>Date/Hour</th>
+                        <th>Task State</th>
                         {% if dry_run %}<th>Status</th>{% endif %}
                     </tr>
                 </thead>
@@ -76,18 +77,28 @@
                         </td>
                         <td>{{ summary }}</td>
                         <td>
-                            <input type="text" class="form-control" name="time_spent_{{ key }}" value="{{ per_task_data[loop.index0].time_spent if dry_run else '' }}" required placeholder="e.g. 1h30m">
+                            <input type="text" class="form-control" name="time_spent_{{ key }}" value="{{ per_task_data[loop.index0].time_spent if dry_run and per_task_data and loop.index0 < per_task_data|length else '' }}" placeholder="e.g. 1h30m">
                         </td>
                         <td>
                             <input type="text" class="form-control date-input" name="date_input_{{ key }}" placeholder="Start Date (HH:MM DD-MM-YYYY, default is now)" value="{% if dry_run %}{{ per_task_data[loop.index0].date_input }}{% elif default_date_input %}{{ default_date_input }}{% else %}{% endif %}" autocomplete="off" data-allow-input="true">
                         </td>
+                        <td>
+                            <select class="form-select" name="state_{{ key }}">
+                                <option value="">-- No Change --</option>
+                                {% for state in available_states[key] %}
+                                    <option value="{{ state }}" {% if dry_run and per_task_data and loop.index0 < per_task_data|length and per_task_data[loop.index0].state == state %}selected{% endif %}>{{ state }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
                         {% if dry_run %}
                         <td>
-                            {% set status = per_task_data[loop.index0].status %}
-                            {% if status == 'ok' %}
+                            {# Updated status logic: OK if time is valid OR state is selected (not empty) #}
+                            {% set time_valid = per_task_data[loop.index0].time_spent and per_task_data[loop.index0].status == 'ok' %}
+                            {% set state_selected = per_task_data[loop.index0].state %}
+                            {% if time_valid or state_selected %}
                                 <span class="badge bg-success">OK</span>
                             {% else %}
-                                <span class="badge bg-danger">{{ status }}</span>
+                                <span class="badge bg-danger">invalid time</span>
                             {% endif %}
                         </td>
                         {% endif %}
@@ -97,7 +108,14 @@
             </table>
         </div>
         {% if dry_run %}
-            {% set all_ok = per_task_data|selectattr('status', 'equalto', 'ok')|list|length == per_task_data|length %}
+            {% set all_ok = true %}
+            {% for i in range(per_task_data|length) %}
+                {% set time_valid = per_task_data[i].time_spent and per_task_data[i].status == 'ok' %}
+                {% set state_selected = per_task_data[i].state %}
+                {% if not (time_valid or state_selected) %}
+                    {% set all_ok = false %}
+                {% endif %}
+            {% endfor %}
             <button type="submit" name="dry_run" value="1" class="btn btn-primary">Dry Run Again</button>
             <button type="submit" name="confirm" value="1" class="btn btn-success ms-2" {% if not all_ok %}disabled{% endif %}>Confirm and Log All</button>
         {% else %}
